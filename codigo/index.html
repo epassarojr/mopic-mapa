@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mapa Interativo Territorial — MOPIC</title>
+  <link rel="stylesheet" href="vendor/maplibre-gl.css" />
+  <link rel="stylesheet" href="css/mapa.css" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <div id="paineis-wrap">
+    <button type="button" id="btn-minimizar" aria-expanded="true" aria-label="Minimizar o painel" title="Minimizar o painel">−</button>
+    <div id="painel-camadas" class="painel-flutuante recolhido">
+      <div class="painel-header">
+        <img class="logo-mopic" src="mopic_logo.png" alt="MOPIC — Mobilização dos Povos Indígenas do Cerrado" />
+        <div class="titulo">Camadas do mapa</div>
+      </div>
+      <div class="painel-body">
+        <div class="grupos" aria-label="Grupos de camadas do mapa"></div>
+        <div class="detalhe" id="detalhe-camadas" hidden></div>
+      </div>
+    </div>
+
+    <div id="painel-ferramentas" class="painel-flutuante recolhido">
+      <div class="painel-header">
+        <div class="titulo">Ferramentas</div>
+      </div>
+      <div class="painel-body">
+        <div class="grupos" aria-label="Grupos de ferramentas"></div>
+        <div class="detalhe" id="detalhe-ferramentas" hidden></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="log"></div>
+
+
+
+  <script src="vendor/maplibre-gl.js"></script>
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script type="module" src="js/principal.js"></script>
+</body>
+</html>

@@ -1,0 +1,406 @@
+@font-face { font-family: "Baloo 2"; font-weight: 400 800; font-display: swap; src: url("../fontes/baloo2-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Baloo 2"; font-weight: 400 800; font-display: swap; src: url("../fontes/baloo2-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
+:root{
+  /* ---- Tokens crus, extraídos da guia de marca oficial em
+     Ref/Logo_MOPIC.ai (teste 10 — antes vinham de Ref/paleta.png,
+     uma referência de imagem não-oficial). ---- */
+  --cor-mopic-marrom:        #4C2020; /* estrutura/moldura das letras do logo — texto primário */
+  --cor-mopic-vermelho:      #CC0E09; /* círculo/seta do logo — só uso gráfico, nunca texto corrido (contraste limítrofe) */
+  --cor-mopic-verde:         #346B1F; /* palmeira/subtítulo do logo — accent principal da UI */
+  --cor-mopic-verde-escuro:  #294D18; /* shade do verde — ~15% mais escuro, hover/contraste de texto */
+  --cor-mopic-azul:          #1E90D6; /* rio do logo — reservado pra foco de teclado */
+  --cor-mopic-amarelo:       #F4AB0E; /* sol do logo — reservado pra swatch das Terras Indígenas */
+  --cor-creme:               #FAF6EE; /* fundo neutro — nenhuma das 5 cores oficiais é um creme, mantido neutro de propósito */
+
+  /* ---- Papéis funcionais da UI, derivados dos tokens acima ---- */
+  --cor-painel-bg:         #FEFCF9;
+  --cor-painel-header-bg:  var(--cor-creme);
+  --cor-borda:             #E6DAC7;
+  --cor-borda-forte:       #CDBBA0;
+  /* Teste 18 (B6) — borda de campos de formulário com contraste ≥ 3:1
+     sobre o fundo (WCAG 1.4.11); #E6DAC7 dava 1,4:1. */
+  --cor-borda-campo:       #9C8A72;
+
+  --cor-texto:             var(--cor-mopic-marrom);
+  --cor-texto-suave:       #5B4C3D;
+  --cor-texto-fraco:       #766757;
+
+  --cor-hover:             #F5F0E8;
+  --cor-ativo-bg:          #F3E4DF;
+
+  --cor-accent:            var(--cor-mopic-verde);
+  --cor-accent-forte:      var(--cor-mopic-verde-escuro);
+
+  --cor-destaque-selecao:  var(--cor-mopic-vermelho); /* linha do resultado de busca no mapa — só gráfico */
+
+  --cor-focus:             var(--cor-mopic-azul); /* agora uma das 5 cores oficiais, antes era um azul fora da paleta */
+
+  --sombra-painel: 0 2px 10px rgba(33,26,20,.18), 0 1px 2px rgba(33,26,20,.09);
+  --raio: 8px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--cor-texto); }
+#map { position: absolute; inset: 0; background: #dfe6ec; }
+
+/* Dois painéis flutuantes independentes (teste 10) — antes um único
+   #painel reunia camadas + Consultas + Impressão. Painel 1 (esquerda)
+   fica só com grupos que ligam/desligam camadas do mapa; painel 2
+   (direita) recebe Consultas + Impressão e futuros grupos que não
+   sejam camadas. Cantos opostos pra não empilhar/disputar espaço
+   vertical quando um dos dois está expandido com um grupo grande. */
+/* Teste 18 — os dois painéis viram UM bloco à esquerda também no
+   desktop (pedido do projeto, 28/09/2026): "Camadas do mapa" em cima e
+   "Ferramentas" (Consultas, Impressão) embaixo, como já era no mobile.
+   O wrapper é o card posicionado, com rolagem se passar da altura da
+   tela; cada .painel-flutuante é uma seção dentro dele, com o próprio
+   mestre-detalhe (grupos + detalhe). */
+#paineis-wrap {
+  /* z-index 3: acima dos controles do MapLibre (2); com muitas camadas, a atribuição cobria os grupos. */
+  position: absolute; top: 10px; left: 10px; z-index: 3; max-width: 480px;
+  background: var(--cor-painel-bg); border: 1px solid var(--cor-borda);
+  border-radius: var(--raio); box-shadow: var(--sombra-painel);
+  max-height: calc(100vh - 20px); max-height: calc(100dvh - 20px); overflow-y: auto; overscroll-behavior: contain;
+}
+
+/* Decisão 7.5 — minimizar. O botão fica no canto, sobre o cabeçalho, acompanha a rolagem do painel
+   (sticky + margem negativa: não ocupa altura) e sobra sozinho quando minimizado. */
+#btn-minimizar { position: sticky; top: 6px; float: right; margin: 6px 6px -32px 0; z-index: 1; min-width: 26px; height: 26px; padding: 0 6px; border: 1px solid var(--cor-borda-forte); border-radius: 5px; background: var(--cor-painel-bg); color: var(--cor-texto); font-size: 14px; line-height: 1; cursor: pointer; }
+#btn-minimizar:hover { background: var(--cor-painel-header-bg); }
+#btn-minimizar:focus-visible { outline: 2px solid var(--cor-focus); outline-offset: 1px; }
+#paineis-wrap.minimizado { right: auto; overflow: visible; }
+/* "Abrir mapa completo" (embed) continua à vista: é a saída do iframe para a aba própria. */
+#paineis-wrap.minimizado > :not(#btn-minimizar, #abrir-completo) { display: none; }
+#paineis-wrap.minimizado #abrir-completo { padding: 6px 12px; border-top-width: 1px; }
+#paineis-wrap.minimizado #btn-minimizar { position: static; float: none; margin: 0; display: block; height: 32px; padding: 0 12px; border: 0; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+/* Decisão 7.2 */
+.comandos-camadas { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--cor-borda); }
+.comandos-camadas button { padding: 5px 6px; border: 1px solid var(--cor-borda-forte); border-radius: 5px; background: var(--cor-painel-bg); color: var(--cor-texto-suave); font-size: 11.5px; cursor: pointer; }
+.comandos-camadas button:hover:not(:disabled) { color: var(--cor-accent-forte); border-color: var(--cor-accent); }
+.comandos-camadas button:disabled { opacity: .55; cursor: default; }
+.comandos-camadas button:focus-visible { outline: 2px solid var(--cor-focus); outline-offset: 1px; }
+.painel-flutuante.recolhido .comandos-camadas { flex-direction: row; }
+.painel-flutuante.recolhido .comandos-camadas button { flex: 1 1 0; }
+.swatch-camada.swatch-ponto { border-radius: 50%; }
+.painel-flutuante { font-size: 13px; line-height: 1.4; }
+#painel-ferramentas { border-top: 2px solid var(--cor-borda-forte); }
+
+/* Header em coluna: logo (quando existe) ocupa a própria linha, em
+   destaque, com o título do painel logo abaixo — só o painel-camadas
+   tem logo; painel-ferramentas cai no mesmo layout com só o título. */
+.painel-flutuante .painel-header { padding: 10px 14px; background: var(--cor-painel-header-bg); border-bottom: 1px solid var(--cor-borda); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.painel-flutuante .painel-header .logo-mopic { height: 46px; width: auto; }
+.painel-flutuante .painel-header .titulo { font-weight: 600; font-size: 13.5px; font-family: "Baloo 2", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+.painel-flutuante .painel-header .subtitulo { font-size: 11px; color: var(--cor-texto-fraco); margin-top: 1px; }
+.painel-flutuante .painel-body { display: flex; align-items: stretch; }
+
+/* Painel recolhido (nenhum grupo aberto): só a coluna de grupos, sem
+   borda direita nem coluna de detalhe — libera espaço pro mapa. */
+.painel-flutuante.recolhido .detalhe { display: none; }
+.painel-flutuante.recolhido .grupos { border-right: none; }
+/* Teste 18 — no bloco único, a seção sem grupo aberto ocupa a largura
+   do bloco: a lista de grupos estica, sem faixa vazia ao lado. */
+.painel-flutuante.recolhido .grupos { width: auto; flex: 1 1 auto; }
+
+.grupos { display: flex; flex-direction: column; width: 152px; flex: 0 0 152px; border-right: 1px solid var(--cor-borda); background: #FAF6EF; padding: 6px; gap: 2px; }
+.grupo-item {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 9px; border-radius: 5px; cursor: pointer; font-size: 12.5px; color: var(--cor-texto-suave);
+  border-left: 3px solid transparent; transition: background-color .12s ease, color .12s ease;
+}
+.grupo-item .chevron { margin-left: auto; font-size: 10px; color: var(--cor-texto-fraco); transition: transform .12s ease; flex: 0 0 auto; }
+.grupo-item[aria-expanded="true"] .chevron { transform: rotate(90deg); }
+.grupo-item .badge-vazio { width: 6px; height: 6px; border-radius: 50%; background: var(--cor-borda-forte); flex: 0 0 auto; }
+.grupo-item:hover { background: var(--cor-hover); color: var(--cor-texto); }
+.grupo-item[aria-expanded="true"] { background: var(--cor-ativo-bg); color: var(--cor-accent-forte); font-weight: 600; border-left-color: var(--cor-accent); }
+.grupo-item:focus-visible { outline: 2px solid var(--cor-focus); outline-offset: -2px; border-radius: 5px; }
+
+.detalhe { flex: 1 1 auto; min-width: 260px; padding: 12px 14px; }
+/* Com um grupo aberto, os detalhes rolam por dentro e os outros grupos ficam à vista: rolando o
+   bloco inteiro, "Ferramentas" ficava abaixo da dobra em tela de 800 px. Em tela muito baixa, o
+   min-height devolve a rolagem ao bloco. O celular continua em acordeão, rolando o bloco. */
+@media (min-width: 701px) {
+  #paineis-wrap { display: flex; flex-direction: column; }
+  #paineis-wrap > * { flex: 0 0 auto; }
+  #paineis-wrap > .painel-flutuante:not(.recolhido) { flex: 0 1 auto; min-height: 220px; display: flex; flex-direction: column; overflow: hidden; }
+  .painel-flutuante:not(.recolhido) .painel-header { flex: 0 0 auto; }
+  .painel-flutuante:not(.recolhido) .painel-body { flex: 1 1 auto; min-height: 0; }
+  .painel-flutuante:not(.recolhido) .detalhe, .painel-flutuante:not(.recolhido) .grupos { overflow-y: auto; overscroll-behavior: contain; }
+  #btn-minimizar { position: absolute; top: 6px; right: 6px; float: none; margin: 0; }
+}
+.detalhe .detalhe-titulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--cor-texto-fraco); margin: 0 0 8px 0; }
+
+.opcao { display: flex; align-items: flex-start; gap: 8px; padding: 6px 4px; border-radius: 5px; cursor: pointer; color: var(--cor-texto); }
+.opcao:hover { background: var(--cor-hover); }
+.opcao input[type="radio"], .opcao input[type="checkbox"] { margin-top: 2px; accent-color: var(--cor-accent); width: 14px; height: 14px; flex: 0 0 auto; }
+.opcao input:focus-visible { outline: 2px solid var(--cor-focus); outline-offset: 2px; }
+.opcao .opcao-label { font-size: 13px; }
+/* Teste 12 — sub-bloco "Terras Indígenas (MOPIC) por Domínio" */
+.detalhe .detalhe-subtitulo { font-size: 12px; font-weight: 600; color: var(--cor-texto); margin: 10px 0 2px 4px; }
+.opcao.opcao-recuada { padding-left: 14px; align-items: center; }
+.opcao.opcao-com-swatch { align-items: center; }
+.swatch-camada { display: inline-block; width: 14px; height: 10px; border: 1.5px solid; border-radius: 2px; opacity: .8; flex: 0 0 auto; }
+.opcao .opcao-desc { font-size: 11px; color: var(--cor-texto-fraco); margin-top: 1px; }
+
+.vazio { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 8px 6px; border: 1px dashed var(--cor-borda-forte); border-radius: 6px; background: #FBF8F3; }
+.vazio svg { color: var(--cor-texto-fraco); }
+.vazio .vazio-titulo { font-size: 12.5px; font-weight: 600; color: var(--cor-texto-suave); }
+.vazio .vazio-texto { font-size: 11.5px; color: var(--cor-texto-fraco); max-width: 30ch; }
+
+/* Grupo "Consultas" */
+.consulta input[type="text"] { width: 100%; padding: 5px 7px; border: 1px solid var(--cor-borda-campo); border-radius: 5px; font-size: 12.5px; }
+.consulta input[type="text"]:focus-visible { outline: 2px solid var(--cor-focus); outline-offset: 1px; }
+.consulta button {
+  margin-top: 6px; padding: 5px 10px; border: none; border-radius: 5px; cursor: pointer;
+  background: var(--cor-accent); color: #fff; font-size: 12.5px; font-weight: 600;
+}
+.consulta button:hover { background: var(--cor-accent-forte); }
+.consulta .resumo { margin-top: 8px; font-weight: 600; font-size: 12px; min-height: 15px; white-space: pre-line; }
+/* Teste 16 — modos "Por TI" / "Por recorte", campo, tipo de recorte e filtro. */
+.consulta .segmentado { display: flex; border: 1px solid var(--cor-accent); border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
+.consulta .segmentado label { flex: 1 1 0; position: relative; }
+.consulta .segmentado input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.consulta .segmentado span { display: block; text-align: center; padding: 5px 6px; font-size: 12px; font-weight: 600; color: var(--cor-accent-forte); }
+.consulta .segmentado input:checked + span { background: var(--cor-accent); color: #fff; }
+.consulta .segmentado input:focus-visible + span { outline: 2px solid var(--cor-focus); outline-offset: -2px; }
+.consulta-linha { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 7px; font-size: 12px; }
+.consulta-linha[hidden] { display: none; }
+.consulta-rotulo { color: var(--cor-texto-suave); font-weight: 600; font-size: 11.5px; }
+.opcao-inline { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.opcao-inline input { accent-color: var(--cor-accent); margin: 0; }
+.consulta select { flex: 1 1 auto; padding: 4px 6px; border: 1px solid var(--cor-borda-campo); border-radius: 5px; font-size: 12.5px; background: #fff; color: var(--cor-texto); }
+.consulta select:focus-visible { outline: 2px solid var(--cor-focus); outline-offset: 1px; }
+.consulta-acoes { display: flex; gap: 6px; margin-bottom: 4px; }
+.consulta button.secundario { background: transparent; color: var(--cor-accent-forte); border: 1px solid var(--cor-borda-forte); }
+.consulta button.secundario:hover { background: var(--cor-hover); }
+.consulta button:disabled { opacity: .5; cursor: not-allowed; }
+.consulta-zoom { margin-top: 6px; flex-wrap: wrap; align-items: center; }
+.consulta-zoom[hidden] { display: none; }
+.consulta-zoom button { margin-top: 0; font-size: 12px; padding: 4px 9px; }
+.consulta .aviso { font-size: 11px; color: var(--cor-texto-fraco); margin-top: 6px; }
+
+/* Autocomplete (novo no teste 8) — dropdown ancorado no wrapper do
+   input, padrão combobox/listbox simplificado. */
+.autocomplete-wrap { position: relative; }
+/* Teste 18 — seta indicando que o campo tem lista (abre ao clicar). */
+.autocomplete-wrap::after { content: "▾"; position: absolute; right: 9px; top: 14px; transform: translateY(-50%); font-size: 11px; color: var(--cor-texto-fraco); pointer-events: none; }
+.consulta .autocomplete-wrap input[type="text"] { padding-right: 24px; }
+.autocomplete-item.carregando { color: var(--cor-texto-fraco); font-style: italic; cursor: default; }
+/* Teste 18 — a lista ocupa espaço no painel (empurra o botão Buscar
+   para baixo) em vez de flutuar por cima: aberta ao clicar no campo,
+   ela cobria o botão. */
+.autocomplete-lista {
+  position: static; margin-top: 2px;
+  margin: 0; padding: 4px; list-style: none; background: var(--cor-painel-bg);
+  border: 1px solid var(--cor-borda-forte); border-radius: 6px; box-shadow: var(--sombra-painel);
+  max-height: 240px; overflow-y: auto;
+}
+.autocomplete-lista[hidden] { display: none; }
+.autocomplete-item {
+  padding: 6px 8px; border-radius: 4px; font-size: 12.5px; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+}
+.autocomplete-item .item-uf { color: var(--cor-texto-fraco); font-size: 11px; flex: 0 0 auto; }
+.autocomplete-item:hover, .autocomplete-item.ativo { background: var(--cor-hover); }
+.autocomplete-item.ativo { background: var(--cor-ativo-bg); color: var(--cor-accent-forte); }
+
+/* Lista de resultados com checkbox (novo no teste 8) — base do que o
+   layout de impressão vai reaproveitar quando o item 4 do backlog
+   (TdR 5.2 — múltiplas feições consultadas na impressão) for feito. */
+/* Decisão 7.1 */
+.selecao { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--cor-borda); }
+.selecao[hidden] { display: none; }
+.selecao .consulta-rotulo { margin: 0 0 4px; }
+.selecao-lista { list-style: none; margin: 0; padding: 0; max-height: 170px; overflow-y: auto; }
+.selecao-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; padding: 4px 2px; font-size: 12px; }
+.selecao-meta { color: var(--cor-texto-fraco); font-size: 10.5px; }
+.consulta .selecao-tirar { flex: 0 0 auto; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--cor-texto-suave); cursor: pointer; }
+.consulta .selecao-tirar:hover { background: var(--cor-painel-header-bg); color: var(--cor-accent-forte); }
+.consulta .selecao-tirar:focus-visible { outline: 2px solid var(--cor-focus); }
+.impressao-titulo { display: block; margin: 8px 0; font-size: 11.5px; font-weight: 600; color: var(--cor-texto-suave); }
+.impressao-titulo select { display: block; box-sizing: border-box; width: 100%; margin-top: 3px; padding: 5px 7px; border: 1px solid var(--cor-borda-forte); border-radius: 4px; font: inherit; font-weight: 400; background: #fff; }
+.impressao-titulo input { display: block; box-sizing: border-box; width: 100%; margin-top: 3px; padding: 5px 7px; border: 1px solid var(--cor-borda-forte); border-radius: 5px; font: inherit; font-weight: 400; color: var(--cor-texto); }
+.resultado-lista { list-style: none; margin: 8px 0 0; padding-top: 6px; border-top: 1px dashed var(--cor-borda); max-height: 170px; overflow-y: auto; }
+.resultado-item { display: flex; align-items: center; gap: 6px; padding: 4px 2px; font-size: 12px; }
+.resultado-item input[type="checkbox"] { accent-color: var(--cor-accent); width: 13px; height: 13px; flex: 0 0 auto; }
+.resultado-item input[type="checkbox"]:focus-visible { outline: 2px solid var(--cor-focus); outline-offset: 2px; }
+.resultado-item .item-nome { flex: 1 1 auto; cursor: pointer; }
+.resultado-item .item-nome:hover { text-decoration: underline; color: var(--cor-accent-forte); }
+.resultado-item .item-uf { color: var(--cor-texto-fraco); font-size: 10.5px; flex: 0 0 auto; }
+.resultado-item .item-situacao { flex: 0 0 auto; font-size: 10px; padding: 1px 5px; border-radius: 8px; white-space: nowrap; }
+.resultado-item .item-situacao.integral { background: var(--cor-accent); color: #fff; }
+.resultado-item .item-situacao.parcial { background: var(--cor-hover); color: var(--cor-texto-suave); border: 1px solid var(--cor-borda); }
+
+/* Grupo "Pressões e ameaças" — controle de anos do desmatamento */
+.anos-range { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.anos-range label { font-size: 11.5px; color: var(--cor-texto-suave); display: flex; flex-direction: column; gap: 2px; }
+.anos-range input[type="number"] {
+  width: 66px; padding: 4px 6px; border: 1px solid var(--cor-borda-campo); border-radius: 5px; font-size: 12.5px;
+}
+.anos-range input[type="number"]:focus-visible { outline: 2px solid var(--cor-focus); outline-offset: 1px; }
+.desmat-status { font-size: 11px; color: var(--cor-texto-fraco); margin-top: 6px; min-height: 14px; }
+/* Grupos do painel de pressões: controles alinhados com o texto da opção recuada. */
+.anos-range-recuado { margin-left: 36px; }
+.anos-range-recuado + .desmat-status, #focos-48h-status, #deter-status, #mineracao-anm-status { margin-left: 36px; }
+.fases-anm { margin-left: 36px; }
+#detalhe-pressoes .legenda-mapbiomas, .anos-range-recuado ~ .legenda-mapbiomas { margin-left: 36px; }
+.desmat-nota { font-size: 11px; color: var(--cor-texto-fraco); margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--cor-borda); }
+.legenda-mapbiomas { font-size: 11px; margin: 4px 0 0 22px; }
+.legenda-mapbiomas > summary { cursor: pointer; color: var(--cor-texto-suave); }
+.legenda-mapbiomas > ul { list-style: none; margin: 6px 0 0; padding: 0; columns: 2; column-gap: 12px; }
+.legenda-mapbiomas li { display: flex; align-items: center; gap: 6px; padding: 1px 0; break-inside: avoid; }
+.swatch-classe { flex: none; width: 10px; height: 10px; border-radius: 2px; }
+/* Teste 19 — legenda das fases da ANM, cada uma com checkbox (filtro). */
+.fases-anm { margin: 6px 0 0 22px; }
+.fases-anm-botoes { display: flex; gap: 6px; margin-bottom: 4px; }
+.fases-anm-botoes button {
+  font-size: 11px; padding: 2px 8px; border-radius: 5px; cursor: pointer;
+  background: transparent; color: var(--cor-accent-forte); border: 1px solid var(--cor-borda-forte);
+}
+.fases-anm-botoes button:hover { background: var(--cor-hover); }
+/* Cada família é um <details> recolhível; o checkbox no <summary> liga/desliga a família inteira. */
+.fases-anm-familia { margin-top: 4px; }
+.fases-anm-familia > summary {
+  display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none;
+  font-size: 10.5px; font-weight: 600; color: var(--cor-texto-suave); text-transform: uppercase; letter-spacing: .03em; padding: 2px 0;
+}
+.fases-anm-familia > summary::-webkit-details-marker { display: none; }
+.fases-anm-familia > summary::before { content: "▸"; font-size: 10px; width: 8px; transition: transform .15s; }
+.fases-anm-familia[open] > summary::before { transform: rotate(90deg); }
+.fases-anm-familia > summary:focus-visible { outline: 2px solid var(--cor-focus); outline-offset: 1px; }
+.fases-anm-familia .familia-cores { display: inline-flex; gap: 1px; }
+.fases-anm-familia .familia-cores span { width: 6px; height: 10px; border: 1px solid rgba(60,40,30,.5); }
+.fases-anm-familia .familia-contagem { font-weight: 400; text-transform: none; color: var(--cor-texto-fraco); }
+.fases-anm-familia .fases-anm-itens { margin-left: 20px; }
+.fase-anm { display: flex; align-items: center; gap: 6px; font-size: 11.5px; padding: 1px 0; cursor: pointer; }
+.fase-anm-swatch { width: 14px; height: 10px; border: 1px solid rgba(60,40,30,.7); border-radius: 2px; flex: 0 0 auto; }
+
+/* Grupo "Impressão" */
+.impressao-desc { font-size: 12px; color: var(--cor-texto-suave); margin: 0 0 10px; }
+.impressao-botoes { display: flex; gap: 8px; flex-wrap: wrap; }
+.impressao-botoes button {
+  padding: 6px 11px; border: none; border-radius: 5px; cursor: pointer;
+  background: var(--cor-accent); color: #fff; font-size: 12.5px; font-weight: 600;
+}
+.impressao-botoes button:hover { background: var(--cor-accent-forte); }
+.impressao-botoes button:disabled { opacity: .55; cursor: wait; }
+.impressao-botoes button.secundario { background: transparent; color: var(--cor-accent-forte); border: 1px solid var(--cor-borda-forte); }
+.impressao-botoes button.secundario:hover { background: var(--cor-hover); }
+.impressao-status { font-size: 11px; color: var(--cor-texto-fraco); margin-top: 8px; min-height: 14px; }
+.impressao-nota { font-size: 11px; color: var(--cor-texto-fraco); margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--cor-borda); }
+
+/* Teste 18 — ponto de quebra único: 700px aqui e LARGURA_MOBILE no JS
+   (antes o CSS usava 480 e o JS 700, e entre 481 e 700px os dois
+   painéis de desktop se sobrepunham). */
+@media (max-width: 700px) {
+  /* Em mobile os dois painéis viram um bloco único (teste 10): o
+     wrapper (que no desktop é display:contents, sem efeito) passa a
+     ser o card posicionado; cada .painel-flutuante flui dentro dele
+     em vez de se autoposicionar, então o empilhamento é automático
+     (sem precisar calcular offset). Um traço divide os dois. */
+  /* Teste 18 — altura máxima com rolagem: com um grupo grande aberto o
+     bloco ocupava a tela inteira sem rolar e o mapa ficava inacessível. */
+  #paineis-wrap {
+    left: 6px; right: 6px; top: 6px; max-width: none;
+    max-height: calc(100vh - 90px); max-height: calc(100dvh - 90px);
+  }
+
+  /* O header de cada painel vira o toggle de nível 1 do accordion —
+     "Camadas do mapa" e "Ferramentas" aparecem recolhidos (só o
+     header, corpo escondido) até serem tocados; o corpo, quando
+     aberto, ainda tem seu próprio nível 2 (tab-strip de grupos +
+     detalhe), controlado por .recolhido como antes. */
+  .painel-flutuante .painel-header { cursor: pointer; }
+  .painel-flutuante:not(.aberto-mobile) .painel-body { display: none; }
+
+  .painel-flutuante .painel-body { flex-direction: column; }
+  .grupos { flex-direction: row; width: auto; flex: 0 0 auto; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--cor-borda); gap: 4px; }
+  .comandos-camadas, .painel-flutuante.recolhido .comandos-camadas { flex: 0 0 auto; flex-direction: row; margin: 0 0 0 4px; padding: 0 0 0 6px; border-top: none; border-left: 1px solid var(--cor-borda); }
+  .comandos-camadas button { white-space: nowrap; }
+  #paineis-wrap.minimizado { right: auto; }
+  /* width:auto — o width:100% do desktop fazia cada aba ocupar a largura
+     toda e só "Mapa Base" aparecia; as demais ficavam fora da tela. */
+  .grupo-item { flex: 0 0 auto; width: auto; white-space: nowrap; border-left: none; border-bottom: 3px solid transparent; }
+  .grupo-item[aria-expanded="true"] { border-left-color: transparent; border-bottom-color: var(--cor-accent); }
+  .detalhe { min-width: 0; }
+}
+
+/* Teste 18 — o log técnico só aparece com ?debug=1 (classe .debug no
+   body). Para o visitante, falhas de serviço aparecem no controle da
+   camada (.aviso-fonte). */
+#log { display: none; position: absolute; bottom: 10px; left: 10px; z-index: 1; background: rgba(255,255,255,.9); padding: 6px 10px; border-radius: 6px; font-size: 11px; color: #555; max-width: 420px; max-height: 140px; overflow: auto; white-space: pre-wrap; }
+body.debug #log { display: block; }
+/* F3 — ?embed=1: o site já traz a marca, e imprimir de dentro de um iframe de outra origem é
+   inconsistente entre navegadores (o PDF não sofre disso). */
+body.embed .logo-mopic, body.embed #btn-imprimir { display: none; }
+/* Dentro do bloco de painéis: sobre o mapa, a atribuição o cobria até em 768 px. */
+#abrir-completo { display: block; padding: 8px 14px; border-top: 2px solid var(--cor-borda-forte); font-size: 12.5px; color: var(--cor-accent); text-decoration: none; }
+#abrir-completo:hover { text-decoration: underline; }
+#aviso-link { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); z-index: 2; width: max-content; max-width: calc(100% - 32px); padding: 8px 12px; background: var(--cor-painel-bg); border: 1px solid var(--cor-borda-forte); border-radius: var(--raio); box-shadow: var(--sombra-painel); font-size: 12px; cursor: pointer; }
+.aviso-fonte { font-size: 11px; color: #8A4B08; font-weight: 600; margin-top: 2px; }
+/* Teste 18 (B5) — largura máxima só no Popup({ maxWidth }) do JS (antes 260px aqui e 320px lá). */
+.maplibregl-popup-content { font-size: 12px; }
+.popup-pressoes { border-top: 1px solid #ddd; margin-top: 8px; padding-top: 8px; }
+.popup-pressoes [data-pressao] + [data-pressao] { border-top: 1px solid #ddd; margin-top: 8px; padding-top: 8px; }
+/* Bloco 9 — indicadores no popup */
+.indicadores { margin-top: 8px; border-top: 1px solid var(--cor-borda); padding-top: 6px; }
+.indicadores > summary { cursor: pointer; font-weight: 700; color: var(--cor-accent-forte); }
+.ind-zonas { display: flex; gap: 12px; margin: 6px 0 2px; }
+.ind-zonas label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.ind-titulo { margin-top: 10px; padding-top: 6px; border-top: 1px dashed var(--cor-borda); font-weight: 700; color: var(--cor-texto); }
+.ind-subtitulo { margin-top: 8px; font-weight: 600; color: var(--cor-texto); }
+.ind-destaque { margin: 3px 0 1px; font-size: 15px; font-weight: 700; color: var(--cor-texto); }
+.ind-destaque span { font-size: 11px; font-weight: 400; color: var(--cor-texto-suave); }
+.ind-linha { margin: 2px 0; color: var(--cor-texto-suave); font-size: 11px; }
+.ind-nota { margin: 3px 0; color: var(--cor-texto-fraco); font-size: 10.5px; }
+.ind-fontes { margin: 10px 0 0; padding-top: 5px; border-top: 1px solid var(--cor-borda); color: var(--cor-texto-fraco); font-size: 10px; }
+.ind-grafico { display: block; width: 100%; height: auto; margin: 4px 0; }
+.ind-texto { font-size: 9px; fill: var(--cor-texto-suave); }
+.ind-eixo { stroke: var(--cor-borda-forte); stroke-width: 1; }
+.ind-marca { cursor: default; outline: none; }
+.ind-grafico g.ind-marca:hover > .barra, .ind-grafico g.ind-marca:focus > .barra { opacity: .72; }
+.ind-grafico g.ind-marca:hover > rect:not(.barra):not([fill="transparent"]), .ind-grafico g.ind-marca:focus > rect:not(.barra):not([fill="transparent"]) { stroke: var(--cor-texto); stroke-width: 1; }
+.ind-valor { fill: var(--cor-texto); font-weight: 600; }
+.ind-tooltip { position: fixed; z-index: 1000; max-width: 240px; padding: 4px 8px; border-radius: 4px; background: #2F2622; color: #FFF; font-size: 11px; line-height: 1.35; box-shadow: 0 2px 8px rgba(0,0,0,.3); pointer-events: none; }
+.ind-tooltip[hidden] { display: none; }
+.ind-tooltip strong { display: block; font-size: 12px; font-weight: 700; }
+.ind-tooltip span { display: block; }
+.mapa-anm .anm-faixa { fill: #F7F4EE; stroke: #8A7B70; stroke-width: .7; stroke-dasharray: 3 2; }
+.mapa-anm .anm-ti { fill: #E4DCCB; }
+.mapa-anm .anm-ti-contorno { fill: none; stroke: var(--cor-texto); stroke-width: 1; pointer-events: none; }
+.mapa-anm[data-zona="ti"] .anm-ti-contorno { stroke-width: 1.6; }
+.mapa-anm[data-zona="faixa"] .anm-faixa { stroke: var(--cor-texto); stroke-width: 1.2; }
+.mapa-anm .anm-processo { stroke-width: .5; fill-opacity: .9; }
+.mapa-anm .anm-processo:hover, .mapa-anm .anm-processo:focus { fill-opacity: 1; stroke-width: 1.2; }
+.mapa-anm .anm-escala { stroke: var(--cor-texto); stroke-width: 1.5; }
+.anm-linhas { margin: 5px 0; }
+.anm-linha { padding: 2px 0; font-size: 11px; color: var(--cor-texto); }
+.anm-linha:hover, .anm-linha:focus { background: rgba(76,32,32,.06); }
+.anm-linha-texto { display: flex; justify-content: space-between; gap: 8px; }
+.anm-linha-texto span:last-child { flex: none; color: var(--cor-texto-suave); }
+.anm-trilho { height: 5px; margin-top: 2px; border-radius: 2px; background: var(--cor-borda); overflow: hidden; }
+.anm-trilho i { display: block; height: 100%; min-width: 2px; border-radius: 2px; }
+.sankey-vistas .ind-zonas { margin: 4px 0; flex-wrap: wrap; gap: 2px 10px; }
+.sankey-vistas:not([data-vista="mudancas"]) .sankey[data-sankey="mudancas"], .sankey-vistas:not([data-vista="completo"]) .sankey[data-sankey="completo"], .sankey-vistas:not([data-vista="saldo"]) .sankey-saldo { display: none; }
+.ind-legenda { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 10px; color: var(--cor-texto-suave); }
+.ind-legenda-item { display: inline-flex; align-items: center; gap: 3px; }
+.ind-legenda-item i { display: inline-block; width: 9px; height: 9px; border: 1px solid rgba(30,24,20,.25); border-radius: 2px; }
+.ind-tabela { margin: 3px 0; font-size: 10.5px; }
+.ind-tabela summary { cursor: pointer; color: var(--cor-texto-suave); }
+.ind-tabela table { width: 100%; border-collapse: collapse; margin-top: 3px; }
+.ind-tabela th, .ind-tabela td { padding: 1px 3px; text-align: right; border-bottom: 1px solid var(--cor-borda); }
+.ind-tabela th:first-child, .ind-tabela td:first-child { text-align: left; }
+.sankey-fita { opacity: .68; }
+.sankey-fita.permanece { opacity: .24; }
+.sankey-fita:hover, .sankey-fita:focus { opacity: .95; stroke: var(--cor-texto); stroke-width: .6; }
+.sankey-rotulo { fill: var(--cor-texto); paint-order: stroke; stroke: rgba(255,255,255,.9); stroke-width: 2.5px; }
+.painel-flutuante .painel-header:focus-visible { outline: 2px solid var(--cor-focus); outline-offset: -2px; }
+
+.swatch-losango { display: inline-block; width: 9px; height: 9px; border: 1.5px solid; transform: rotate(45deg); margin: 0 4px; flex: none; }
+.info-camada { margin-left: auto; padding: 0 4px; border: 0; background: none; color: #6B5E52; font-size: 14px; line-height: 1; cursor: pointer; flex: none; }
+.info-camada:hover, .info-camada:focus-visible { color: #1E4D13; }
+.info-camada-texto { margin: 0 0 6px 26px; font-size: 11.5px; color: #6B5E52; }
+
+
+/* O log de depuração é só informativo: nunca bloqueia o clique no que está por baixo */
+#log { pointer-events: none; }
